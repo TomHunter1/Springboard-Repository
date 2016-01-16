@@ -1,0 +1,31 @@
+Capstone Project for Springboard:
+
+1) Background: 
+Existing research has shown the relationship of implied volatility versus realized volatility to be historically overstated in OTC derivatives markets. I would like to examine this relationship in the following financial products: SP 500, Gold, Oil, Treasury Bonds and their respective implied volatility indexes.  Apple or Exxon? Additional analysis can be around binary events in the underlying.
+Implied Volatility is commonly misunderstood and misquoted in the popular news media outlets as being the fear and greed index. This is partially due to its use in pseudo finance as being a predictor of market downturns or buying opportunities. It is a useful and quantize tool but its calculation and use is supposed to come from the derivatives markets
+A more appropriate use of this tool is instead use it for its actual intention, as a tool to measure the future distribution curve in the Over the Counter derivatives market to get a better expectation of the estimated future range of an underlying security. 
+My intent with this research is to use Implied Volatility of over the counter derivative markets as a model to predict a histogram of the expected future range of market. I want to test the duration of the accuracy of these ranges, I want to look at Black Swan Events, want to look at Binary Data events, and I want to look 
+
+2) Questions to answer:
+- Foundational Question: Does Implied Volatility overstate Realized Implied volatility on a 30 day time period? 
+	- Let’s look at foundational views of Random Walk theory
+	- Let's look at distribution curves of implied volatility histograms using IV as the SD for the histogram
+	-Does the Implied volatility overstate historical standard deviations and do they fall around the expectation of a normally distributed curve. 
+
+Analysis to perform:
+- Look at % change of index in a histogram to show independent relationship in the % change of index
+- Plot and Look at the correlation between implied volatility change and underlying % change.
+- Plot and Look at the correlation between standardized 30 day IV and Realized 30 STD of index
+- Plot implied volatility histogram overplayed on a realized STD
+- Use 30 day IV to predict 30 day STD for casing, does it line up inside the distribution curve with a Gem Line curve
+Look at subsection of data to examine:
+- IV before binary events such as- Fed Rate changes, Presidential Elections to see if predicted IV range was consistent with Market move after the event  
+
+Variables to Transform:
+-Tidy Data to aggregate all datasets into on final and full dataset.
+-Strip out date by Month, Day and Year
+-Break out a % change between each day- All observations will need to be normalized for % change.
+- Tie IV indexes back to underlying index.
+
+Pull Data from:
+- Yahoo Finance 
