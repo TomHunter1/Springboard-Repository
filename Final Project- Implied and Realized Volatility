@@ -1,0 +1,156 @@
+library(ggplot2)
+library(zoo)
+library(quantmod)
+library(dplyr)
+library(tidyr)
+library(lattice)
+library(ggplot2)
+library(TTR)
+library(gtools)
+library(DataCombine)
+library(gmodels)
+library(pastecs)
+library(psych)
+library(seasonal)
+library(WDI)
+library(useful)
+
+# SECTION 1: Extract and Load Data
+
+# Load CSV files for S&P500 and VIX into R studio
+SPXtest <- read.csv("SPX500.1.1.00-12.31.15.csv")
+VIXtest <- read.csv("VIX.1.1.00-12.31.15.csv")
+
+head(SPXtest)
+
+summary(SPXtest)
+
+# Reformating Date variable from Factor type to Date type; This is important
+# to allow dates to be sorted in the data frame. 
+class(SPXtest$Date)
+SPXtest$Date <- as.Date(SPXtest$Date, format = '%Y-%m-%d')
+VIXtest$Date <- as.Date(VIXtest$Date, format = '%m/%d/%Y')
+class(SPXtest$Date)
+class(VIXtest$Date)
+
+# Creating a new dataframe called OrderSPX & OrderVIX to start sorting dates into decending order due to the nature of the calculations performed on the exisiting data. 
+OrderSPX <- SPXtest[order(SPXtest$Date),]
+OrderVIX <- VIXtest[order(VIXtest$Date),]
+
+#I created a function to capture the daily % change in the SPX and VIX Closing Prices.
+Daily_Percent_Change <- function(x){
+  curr <- x[-1]
+  prev <- x[1:(length(x)-1)]
+  Final <- c( NA, (round( (curr-prev) / prev, 4)))*100
+  Final[1:1] = NA
+  return(Final)
+}
+
+OrderSPX$day1perchange <- Daily_Percent_Change(OrderSPX$Adj.Close)
+OrderVIX$day1perchangeVIX <- Daily_Percent_Change(OrderVIX$Adj.Close)
+
+# I'm converting the VIX Adj. Closing Price Variable and renaming it with the tag VIX. Them I'm subsetting the datasets for important varialbes and merging them together. 
+OrderVIX$Adj.CloseVIX <- OrderVIX$Adj.Close
+OrderVIXsub <- subset(OrderVIX, select= c(Date, Adj.CloseVIX, day1perchangeVIX))
+OrderSPXsub <- subset(OrderSPX, select= c(Date, Adj.Close, day1perchange))
+Data1 <- merge(x=OrderSPXsub, y = OrderVIXsub, by = "Date")
+
+# SECTION 2: Explore the each variable independently from each other. More transformation will be done in a later stage to break out and lag implied volatility. 
+
+# Here I'm assessing the number of observations of days are in each year and how many days are in a month
+table(format(Data1$Date, '%Y'))
+mean(table(format(Data1$Date, '%Y')))
+mean(table(format(Data1$Date, '%Y')))/12
+
+#There are roughly 251.5 trading days in  a year and an average of 21 trading days in a month. Here I am taking those 21 days to determine a running 2 day, 1 month, 3 month, 6 month, 9 month and 12 month timeline of standard deviation. 
+#I'm starting the exploratory process of the primary variables % change
+describe(Data1$day1perchange)
+describe(Data1$day1perchangeVIX)
+
+# SECTION 3: Visualize individual Indexes over time and understand distribution
+# Chart of the price of the S&P 500 over time to assess a visual of data. Then a chart of the distribution of the daily percentage change in the index. 
+qplot(Data1$Date, Data1$Adj.Close, geom = "line", ylab = "Closing Price of Index", xlab ="Time", main = "S&P 500 Price Data Over Time")  
+densityplot(~day1perchange, data = Data1, xlab = "Daily Percentage Change in S&P500", main = "Distribution of Daily Percentage Changes in S&P500", from = -5, to = 5, plot.points = FALSE, auto.key = TRUE, width = .00001)
+
+# Chart of the "Price" of the VIX Index over time to asses a visual of data. Then a chart of the distribution of the daily percentage change in the index.
+qplot(Data1$Date, Data1$Adj.CloseVIX, geom = "line", ylab = "Closing Price of Index", xlab ="Time", main = "VIX Price Data Over Time")  
+densityplot(~day1perchangeVIX, data = Data1, xlab = "Daily Percentage Change in VIX", main = "Distribution of Daily Percentage Changes in VIX", from = -26.6, to = 26.6, plot.points = FALSE, auto.key = TRUE, width = .00001)
+
+# AUTO CORRELATION Test on S&P 500
+AutoCORData <- acf(Data1$day1perchange, na.action = na.pass)
+plot(AutoCORData[1:36], main = "Test of AutoCorrelation over 35 trading days")
+
+# SECTION 4: Relationship of the percentage changes in the VIX and S&P 500
+ggplot(data = Data1, aes(day1perchange,day1perchangeVIX))+ geom_point(alpha = 1/100)+geom_rug(col= "darkred", alpha =.1) + geom_smooth(method = "lm", se = TRUE)
+
+# Looking at a graph of the running correlation between the primary variables - Traders will often us a running correlation in the expectation that two relationships will revert. 
+runcor63 <- running(Data1$day1perchange, Data1$day1perchangeVIX, fun=cor, width = 63)
+plot(x= Data1$Date[1:3963], y= runcor63, ylab="Correlation", main = "Correlation of the VIX and S&P500 Daily Percentage Change", type="l", xlab="Time")
+
+#SECTION 5: Testing if Implied Volatility today can predict the future rangne of the return in the stock market tommorw. 
+
+# Here I'm calculating the Implied STD Range in terms of price. I'm taking the time of STD observed dividing it by the amount of time in a year - > 252 trading days. I'm taking the square root to caputre the impact of movement over time and multiplying it by the Implied volatility % for the index - > This gives me a weighted volatility percentage by time. I'm multiplying this factor by the index's price to conver the % into a price, so I can use it for a confidence interval. 
+
+# I decided to use 6 periods and here I copy my dataset 6 times, then I order it by Date and layer in a Period. The values 2, 21, 63, 126, 189 and 252 respectively equate to 2 days, 1 month, 3 month, 6 month, 9 month and 12 months repectfully based on previous code assesed summarizing the # of trading days and average days in a month.  
+
+DataExpanded <- Data1[rep(row.names(Data1), 6), 1:5]
+DataExpanded <- DataExpanded[order(DataExpanded$Date),]
+DataExpanded$PeriodAnalyzed <- rep(c(2,21,63,126,189,252),4025)
+
+# Here I'm adjusting the volatility of the index for the appropiate period being assessed. This equation is based on academic reserach for adjusting annualized Standard deviations. 
+DataExpanded$Imp_STD <- DataExpanded$Adj.CloseVIX * ((DataExpanded$PeriodAnalyzed/252)^.5)
+
+# Here I lead future price data back to original data so I can beging to test the probability of historical and implied moves. I tried my absolute best to consolidate this into on line but the function is incredibly difficult to manipulate so I resorted to calcing these variables and then I consolidate them through an if statement. Each sldie by is adjusted for 6 dataset repeats. 
+
+DataExpanded <- slide(DataExpanded, Var = 'Adj.Close', NewVar = 'FuturePrice2', slideBy = (2*6))
+DataExpanded <- slide(DataExpanded, Var = 'Adj.Close', NewVar = 'FuturePrice21', slideBy = (21*6))
+DataExpanded <- slide(DataExpanded, Var = 'Adj.Close', NewVar = 'FuturePrice63', slideBy = (63*6))
+DataExpanded <- slide(DataExpanded, Var = 'Adj.Close', NewVar = 'FuturePrice126', slideBy = (126*6))
+DataExpanded <- slide(DataExpanded, Var = 'Adj.Close', NewVar = 'FuturePrice189', slideBy = (189*6))
+DataExpanded <- slide(DataExpanded, Var = 'Adj.Close', NewVar = 'FuturePrice252', slideBy = (252*6))
+
+# Here I'm consolidating all of the variables I created in the previous step into one Variable- Future Price that ties to the amount of lead in trading days of the Period Analyzed.
+
+DataExpanded$FuturePrice <- ifelse(DataExpanded$PeriodAnalyzed == 2, DataExpanded$FuturePrice2, 
+       ifelse(DataExpanded$PeriodAnalyzed == 21, DataExpanded$FuturePrice21,
+              ifelse(DataExpanded$PeriodAnalyzed == 63, DataExpanded$FuturePrice63, 
+                     ifelse(DataExpanded$PeriodAnalyzed == 126, DataExpanded$FuturePrice126,            
+                            ifelse(DataExpanded$PeriodAnalyzed == 189, DataExpanded$FuturePrice189,
+                                   ifelse(DataExpanded$PeriodAnalyzed == 252, DataExpanded$FuturePrice252, NA ))))))
+#Dropping old and unused variables
+DataExpanded$FuturePrice2 <- NULL
+DataExpanded$FuturePrice21 <- NULL
+DataExpanded$FuturePrice63 <- NULL
+DataExpanded$FuturePrice126 <- NULL
+DataExpanded$FuturePrice189 <- NULL
+DataExpanded$FuturePrice252 <- NULL
+
+# Here I'm taking the difference in realized actual returns for the period and calculating how much the market has moved since the time frame estimated. 
+DataExpanded$FutureDayChange <- abs(round((DataExpanded$FuturePrice - DataExpanded$Adj.Close) / DataExpanded$Adj.Close, digits = 4))*100
+
+## t- Testing the significance of the Differences. Testing each sample of each period. 
+
+t.test(DataExpanded$Imp_STD, DataExpanded$FutureDayChange, var.equal=TRUE, paided = FALSE)
+t.test(subset(DataExpanded, PeriodAnalyzed == 2, select =  Imp_STD), subset(DataExpanded, PeriodAnalyzed ==2, select =  FutureDayChange), var.equal=TRUE, paided = FALSE)
+t.test(subset(DataExpanded, PeriodAnalyzed == 21, select =  Imp_STD), subset(DataExpanded, PeriodAnalyzed ==21, select =  FutureDayChange), var.equal=TRUE, paided = FALSE)
+t.test(subset(DataExpanded, PeriodAnalyzed == 63, select =  Imp_STD), subset(DataExpanded, PeriodAnalyzed == 63, select =  FutureDayChange), var.equal=TRUE, paided = FALSE)
+t.test(subset(DataExpanded, PeriodAnalyzed == 126, select =  Imp_STD), subset(DataExpanded, PeriodAnalyzed == 126, select =  FutureDayChange), var.equal=TRUE, paided = FALSE)
+t.test(subset(DataExpanded, PeriodAnalyzed == 189, select =  Imp_STD), subset(DataExpanded, PeriodAnalyzed == 189, select =  FutureDayChange), var.equal=TRUE, paided = FALSE)
+t.test(subset(DataExpanded, PeriodAnalyzed == 252, select =  Imp_STD), subset(DataExpanded, PeriodAnalyzed ==252, select =  FutureDayChange), var.equal=TRUE, paided = FALSE)
+
+#Graphs of Realized VS. Predicted Implied standard deviations. In the second graph, there is a line with the slope of 1 that acts as the null prediction to add context into examined data. 
+
+ggplot(data=DataExpanded, aes(x=FutureDayChange, y=Imp_STD)) + geom_point(alpha = 1/2, aes(color=PeriodAnalyzed)) + labs(x="Actual Absolute Realized Return", y ="Implied Predicted Range") + ggtitle("Implied and Actual Absolute Realized Returns Periods Later")
+
+ggplot(data=DataExpanded, aes(x=FutureDayChange, y=Imp_STD)) + geom_point( aes(color=PeriodAnalyzed)) + labs(x="Actual Absolute Realized Return", y ="Implied Predicted Range") + ggtitle("Implied and Actual Realized Returns Periods Later") + facet_wrap(~PeriodAnalyzed) + geom_abline()
+
+# Implied Returns Minus Realized Return
+DataExpanded$Difference <- DataExpanded$Imp_STD - DataExpanded$FutureDayChange
+
+## Graphs of the difference between Implied and Realzied Volatility by Period. Note that Implied Volatility tends to over predict moves in the market.
+ggplot(DataExpanded, aes(x = Difference)) + geom_density() + scale_colour_discrete() + labs(x="Implied Under Predicted <<<<<0>>>>>>> Implied Over Predicted") + ggtitle("Implied and Actual Realized Returns Periods Later") + facet_wrap(~PeriodAnalyzed) + geom_vline(xintercept = 0) 
+
+# Creating a quick table of the number of observations
+DataExpanded$UnderOver <- ifelse(DataExpanded$Difference < 0, 'Realized > Implied', 'Realized < Implied')
+# This is the table mentioned above. 
+data.frame(table(DataExpanded$UnderOver))
