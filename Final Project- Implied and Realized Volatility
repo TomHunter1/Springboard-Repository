@@ -150,7 +150,18 @@ DataExpanded$Difference <- DataExpanded$Imp_STD - DataExpanded$FutureDayChange
 ## Graphs of the difference between Implied and Realzied Volatility by Period. Note that Implied Volatility tends to over predict moves in the market.
 ggplot(DataExpanded, aes(x = Difference)) + geom_density() + scale_colour_discrete() + labs(x="Implied Under Predicted <<<<<0>>>>>>> Implied Over Predicted") + ggtitle("Implied and Actual Realized Returns Periods Later") + facet_wrap(~PeriodAnalyzed) + geom_vline(xintercept = 0) 
 
-# Creating a quick table of the number of observations
+# Creating a quick table of the number of observations, breaking out for observations and running some correlation data and checking R squared. 
 DataExpanded$UnderOver <- ifelse(DataExpanded$Difference < 0, 'Realized > Implied', 'Realized < Implied')
 # This is the table mentioned above. 
 data.frame(table(DataExpanded$UnderOver))
+
+data.frame(table(subset(DataExpanded, PeriodAnalyzed == 2,UnderOver)))
+data.frame(table(subset(DataExpanded, PeriodAnalyzed == 21,UnderOver)))
+data.frame(table(subset(DataExpanded, PeriodAnalyzed == 63,UnderOver)))
+data.frame(table(subset(DataExpanded, PeriodAnalyzed == 126,UnderOver)))
+data.frame(table(subset(DataExpanded, PeriodAnalyzed == 189,UnderOver)))
+data.frame(table(subset(DataExpanded, PeriodAnalyzed == 252,UnderOver)))
+
+cor(DataExpanded$Imp_STD, DataExpanded$FutureDayChange , use = "complete.obs")
+summary(lm(FutureDayChange~ Imp_STD, data= DataExpanded))
+
