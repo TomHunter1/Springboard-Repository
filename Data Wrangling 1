@@ -1,0 +1,46 @@
+library(XLConnect)
+library(plyr)
+data <- readWorksheet(loadWorkbook("data.xlsx"), sheet =1)
+tbl_df(data)
+
+#Convert company names into standardized format. da
+data <- data %>%
+  arrange(company)%>%
+  unite(full_address, address, city, country, sep = ", ")
+
+### Correct the spelling mistakes of the company names
+data$company[1:7] = "akzo"
+data$company[8:16] = "philips"
+data$company[17:20] = "unilever"
+data$company[21:25] = "van houten"
+
+#Convert Product Number and Code
+data$Product.number <- lapply(strsplit(as.character(data$Product.code...number), "\\-"), "[", 2)
+data$Product_category <- lapply(strsplit(as.character(data$Product.code...number), "\\-"), "[", 1)
+
+# Converting all Product codes to Product values =
+data$Product_category[data$Product_category == "p"] <- "Cell Phone"
+data$Product_category[data$Product_category == "v"] <- "TV"
+data$Product_category[data$Product_category == "x"] <- "Laptop"
+data$Product_category[data$Product_category == "q"] <- "Tablet"
+data$Product_category[data$Product_category == "p"] <- "Smartphone"
+
+### Add four binary (1 or 0) columns for company
+data$company_philips[data$company == "philips"] <- 1
+data$company_philips[data$company != "philips"] <- 0
+data$company_akzo[data$company == "akzo"] <- 1
+data$company_akzo[data$company != "akzo"] <- 0
+data$company_van_houten[data$company == "van houten"] <- 1
+data$company_van_houten[data$company != "van houten"] <- 0
+data$company_unilever[data$company == "unilever"] <- 1
+data$company_unilever[data$company != "unilever"] <- 0
+
+### Add four binary (1 or 0) columns for product category
+data$product_smartphone[data$Product_category == "Smartphone"] <- 1
+data$product_smartphone[data$Product_category != "Smartphone"] <- 0
+data$product_laptop[data$Product_category == "Laptop"] <- 1
+data$product_laptop[data$Product_category != "Laptop"] <- 0
+data$product_tv[data$Product_category == "TV"] <- 1
+data$product_tv[data$Product_category != "TV"] <- 0
+data$product_tablet[data$Product_category == "Tablet"] <- 1
+data$product_tablet[data$Product_category != "Tablet"] <- 0
