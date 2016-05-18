@@ -1,0 +1,18 @@
+# Loading data in after transforming dataset to conform with Missing Values issue
+data <- read.csv("titanic_Set2.csv")
+
+# updating Missing values to have value of S
+data$embarked[data$embarked == ""] <- "S"
+
+# Updating the Mean of age to reflect the mean of the dataset. 
+data$age[is.na(data$age)] <- mean(data$age, na.rm = TRUE)
+
+#Lifeboat Variable updated to None
+data$boat[data$boat == ""] <- NA
+
+#New Variable column indicating if passenger has a cabin or not
+
+data$has_cabin_number[data$cabin == ""] <- 0
+data$has_cabin_number[data$cabin != ""] <- 1
+
+tail(data)
